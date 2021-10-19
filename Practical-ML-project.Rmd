@@ -1,0 +1,114 @@
+---
+title: "Practical Machine Learning Course Project"
+author: "Ankitha Giridhar"
+date: "19/10/2021"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+### Overview
+Data can now be collected from fitness trackers. Many fitness enthusiasts take measurements about their activity quite regularly, generally focusing on quantifying their activity.However, the quality of the exercise must also be taken into consideration. In this project, data from accelerometers on the belt, forearm, arm, and dumbbells of 6 participants, who were asked to perform barbell lifts correctly and incorrectly in 5 different ways. The goal was to predict the classe variable, which indicates the manner in which they did this. 
+
+### Relevant Libraries
+The libraries relevant for the project are loaded, and the seed is set to 12
+```{r libraries}
+library(lattice)
+library(ggplot2)
+library(caret)
+library(kernlab)
+library(rattle)
+library(corrplot)
+library(randomForest)
+set.seed(12)
+```
+
+### Loading the Data
+The train and test files are read into train_set and test from their urls. The dimensions of train_set and test give an initial idea of the size of the data.
+```{r load_data}
+train_link <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-training.csv"
+train_set <- read.csv(url(train_link))
+test_link <- "http://d396qusza40orc.cloudfront.net/predmachlearn/pml-testing.csv"
+test <- read.csv(url(test_link))
+dim(train_set)
+dim(test)
+```
+
+### Cleaning the Data
+The NA values are removed from the train_set as are the variables near zero variance.
+```{r cleaning}
+#Removing NA values
+train_set <- train_set[,colMeans(is.na(train_set)) < .9] 
+train_set <- train_set[,-c(1:7)] 
+#Removing variables near zero variance
+nzv <- nearZeroVar(train_set)
+train_set <- train_set[, -nzv]
+dim(train_set)
+```
+The change in the dimension of train from (19622,160) to (19622,53) represents the cleaning done. 
+
+### Splitting the Data
+The data is split into the training and validation subsets with a ratio of 0.7.
+```{r partition}
+train_part <- createDataPartition(train_set$classe, p=0.7, list=FALSE)
+train <- train_set[train_part, ]
+val  <- train_set[-train_part, ]
+dim(train)
+dim(val)
+```
+
+### Correlations
+Before launching into the actual models and predictions, the train set is examined for correlations.
+```{r corrs}
+corrPlot <- cor(train[, -length(names(train))])
+corrplot(corrPlot, method="color")
+```
+
+### Cross Validation 
+A control is set up so that a 5 fold cross-validation can be done while training the models.
+```{r crossval}
+control <- trainControl(method="cv", number=3, verboseIter=F)
+```
+
+### The Decision Tree Model
+The first model tried out is the decision tree model. The tree is visualized after training. 
+```{r decision_tree}
+dt_model <- train(classe~., data=train, method="rpart", trControl = control, tuneLength = 5)
+fancyRpartPlot(dt_model$finalModel)
+val_preds_dt <- predict(dt_model,val)
+confusionMatrix(val_preds_dt, as.factor(val$classe))
+plot(dt_model)
+```
+The accuracy of this model is 54.07%. Hence, other models need to be explored.
+
+### The Generalized Boosted Model
+
+The second model explored is the generalized boosted model.
+```{r generalized_boosted}
+gb_model <- train(classe~., data=train, method="gbm", trControl = control, tuneLength = 5)
+val_preds_gb <- predict(gb_model,val)
+confusionMatrix(val_preds_gb, as.factor(val$classe))
+plot(gb_model)
+```
+The accuracy for this model is 98.93% which is significantly better than the previous one.
+
+### The Random Forest Classifier
+The second model attempted is the random forest 
+classifier.
+```{r random_forest}
+rf_model <- train(classe~., data=train, method = 'rf', trControl = control, tuneLength = 5)
+val_preds_rf <- predict(rf_model,val)
+confusionMatrix(val_preds_rf, as.factor(val$classe))
+plot(rf_model)
+```
+
+The accuracy for this model is 99.56%, which is the best among all 3 models.
+
+### Predictions on the Test Set
+
+The best model, i.e. the random forest model was used to make the final predictions on the test set.
+```{r testing}
+pred <- predict(rf_model, test)
+print(pred)
+```
